@@ -52,13 +52,36 @@ data <- data[!is.na(data$Embarked),]
 data[is.na(data$Embarked)] <- embarkedMode
 #rownames(data) <- NULL
 
+
 # check data again after patching, to make sure there are no more missing values
 df2 <- as.data.frame.matrix(data)
 df2<-`names<-`(df2, c('Survived','Pclass','Sex','Age','SibSp','Parch','Fare','Embarked'))
 missmap(df2, main = "Missing values vs observed after fixing")
 
-train <- data[1:800,]
-test <- data[801:889,]
+usekfoldvalidation <- 0
+k <- 81
+
+if (usekfoldvalidation == 1) {
+
+	#Randomly shuffle the data
+	data<-data[sample(nrow(data)),]
+
+	#Create 10 equally size folds
+	folds <- cut(seq(1,nrow(data)),breaks=k,labels=FALSE)
+
+	#Perform 10 fold cross validation
+	for(i in 1:k){
+		#Segement your data by fold using the which() function 
+		testIndexes <- which(folds==i,arr.ind=TRUE)
+		train <- data[testIndexes, ]
+		test <- data[-testIndexes, ]
+	}
+} else {
+
+	train <- data[1:800,]
+	test <- data[801:889,]
+	
+}
 
 model <- glm(Survived ~.,family=binomial(link='logit'),data=train)
 
@@ -76,5 +99,13 @@ fitted.results <- ifelse(fitted.results > 0.5,1,0)
 misClasificError <- mean(fitted.results != test$Survived)
 print(paste('Accuracy',1-misClasificError))
 
+# ROC curve
+library(ROCR)
+p <- predict(model, newdata=subset(test,select=c(2,3,4,5,6,7,8)), type="response")
+pr <- prediction(p, test$Survived)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf, col=rainbow(10))
 
-
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
